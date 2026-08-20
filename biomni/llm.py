@@ -35,7 +35,7 @@ def get_llm(
     # Use config values for any unspecified parameters
     if config is not None:
         if model is None:
-            model = config.llm_model
+            model = config.llm
         if temperature is None:
             temperature = config.temperature
         if source is None:
@@ -47,14 +47,14 @@ def get_llm(
 
     # Use defaults if still not specified
     if model is None:
-        model = "claude-3-5-sonnet-20241022"
+        model = os.getenv("BIOMNI_LLM") or os.getenv("BIOMNI_LLM_MODEL") or "your-model-name"
     if temperature is None:
         temperature = 0.7
     if api_key is None:
         api_key = "EMPTY"
     # Auto-detect source from model name if not specified
     if source is None:
-        env_source = os.getenv("LLM_SOURCE")
+        env_source = os.getenv("BIOMNI_SOURCE") or os.getenv("LLM_SOURCE")
         if env_source in ALLOWED_SOURCES:
             source = env_source
         else:

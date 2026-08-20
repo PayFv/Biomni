@@ -7,6 +7,23 @@ Maintains full backward compatibility with existing code.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env before applying defaults so custom RPC / model name take effect.
+_project_env = Path(__file__).resolve().parents[1] / ".env"
+if _project_env.exists():
+    load_dotenv(_project_env, override=False)
+load_dotenv(".env", override=False)
+
+
+def _first_env(*names: str) -> str | None:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
 
 
 @dataclass
@@ -33,7 +50,8 @@ class BiomniConfig:
     timeout_seconds: int = 600
 
     # LLM settings (API keys still from environment)
-    llm: str = "claude-sonnet-4-5"
+    # Default: custom OpenAI-compatible RPC + model name from .env
+    llm: str = "your-model-name"
     temperature: float = 0.7
 
     # Tool settings
@@ -43,14 +61,15 @@ class BiomniConfig:
     commercial_mode: bool = False  # If True, excludes non-commercial datasets
 
     # Custom model settings (for custom LLM serving)
-    base_url: str | None = None
+    base_url: str | None = "http://localhost:8000/v1"
     api_key: str | None = None  # Only for custom models, not provider API keys
 
     # LLM source (auto-detected if None)
-    source: str | None = None
+    source: str | None = "Custom"
 
     # Third-party integrations
     protocols_io_access_token: str | None = None
+    tavily_api_key: str | None = None
 
     def __post_init__(self):
         """Load any environment variable overrides if they exist."""
@@ -68,17 +87,24 @@ class BiomniConfig:
             self.commercial_mode = os.getenv("BIOMNI_COMMERCIAL_MODE").lower() == "true"
         if os.getenv("BIOMNI_TEMPERATURE"):
             self.temperature = float(os.getenv("BIOMNI_TEMPERATURE"))
-        if os.getenv("BIOMNI_CUSTOM_BASE_URL"):
-            self.base_url = os.getenv("BIOMNI_CUSTOM_BASE_URL")
-        if os.getenv("BIOMNI_CUSTOM_API_KEY"):
-            self.api_key = os.getenv("BIOMNI_CUSTOM_API_KEY")
-        if os.getenv("BIOMNI_SOURCE"):
-            self.source = os.getenv("BIOMNI_SOURCE")
+        custom_base_url = _first_env("BIOMNI_CUSTOM_BASE_URL", "CUSTOM_MODEL_BASE_URL", "BIOMNI_RPC")
+        if custom_base_url:
+            self.base_url = custom_base_url
+        custom_api_key = _first_env("BIOMNI_CUSTOM_API_KEY", "CUSTOM_MODEL_API_KEY")
+        if custom_api_key:
+            self.api_key = custom_api_key
+        source = _first_env("BIOMNI_SOURCE", "LLM_SOURCE")
+        if source:
+            self.source = source
 
         # Protocols.io access token (prefer specific env vars)
         env_token = os.getenv("PROTOCOLS_IO_ACCESS_TOKEN") or os.getenv("BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN")
         if env_token:
             self.protocols_io_access_token = env_token
+
+        tavily_key = _first_env("TAVILY_API_KEY", "BIOMNI_TAVILY_API_KEY")
+        if tavily_key:
+            self.tavily_api_key = tavily_key
 
     def to_dict(self) -> dict:
         """Convert config to dictionary for easy access."""
@@ -92,6 +118,7 @@ class BiomniConfig:
             "base_url": self.base_url,
             "api_key": self.api_key,
             "source": self.source,
+            "tavily_api_key": ("set" if self.tavily_api_key else None),
         }
 
 
